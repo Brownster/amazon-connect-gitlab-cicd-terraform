@@ -1,0 +1,56 @@
+name: 'Terraform'
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  id-token: write   # Required for OIDC integration
+  contents: read
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+    environment: production
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # Checkout the repository to the GitHub Actions runner
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Configure AWS credentials using GitHub OIDC integration.
+      # This assumes the role specified in the trust policy (update with your account details).
+      - name: Configure AWS Credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::891612549865:role/githubactions-role
+          aws-region: us-east-1
+
+      # Setup the Terraform CLI (using version 1.9.5 or later)
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.9.5
+
+      # Initialize a new or existing Terraform working directory.
+      - name: Terraform Init
+        run: terraform init
+
+      # Check that all Terraform configuration files adhere to canonical formatting.
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      # Generate an execution plan for Terraform.
+      - name: Terraform Plan
+        run: terraform plan -input=false
+
+      # On push to the "main" branch, apply the Terraform plan.
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -input=false

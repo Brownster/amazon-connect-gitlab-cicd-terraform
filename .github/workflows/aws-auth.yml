@@ -1,0 +1,46 @@
+name: AWS Authentication Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop, stage]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  assume-role-test:
+    runs-on: ubuntu-latest
+    environment: dev
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.DEVOPS_ROLE_ARN }}
+        aws-region: us-east-1
+        
+    - name: Test AWS credentials
+      run: aws sts get-caller-identity
+      
+    - name: Assume role in target account
+      run: |
+        # Export temporary credentials for cross-account access
+        CREDS=$(aws sts assume-role \
+          --role-arn ${{ secrets.AWS_CREDS_TARGET_ROLE }} \
+          --role-session-name "GitHubActions-${GITHUB_REPOSITORY}-${GITHUB_RUN_ID}" \
+          --duration-seconds 3600 \
+          --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+          --output text)
+          
+        # Set AWS credentials in the environment
+        echo "AWS_ACCESS_KEY_ID=$(echo $CREDS | cut -d' ' -f1)" >> $GITHUB_ENV
+        echo "AWS_SECRET_ACCESS_KEY=$(echo $CREDS | cut -d' ' -f2)" >> $GITHUB_ENV
+        echo "AWS_SESSION_TOKEN=$(echo $CREDS | cut -d' ' -f3)" >> $GITHUB_ENV
+        
+    - name: Verify assumed role
+      run: aws sts get-caller-identity
